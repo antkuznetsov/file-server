@@ -1,24 +1,29 @@
 package common;
 
 public enum Status {
-    OK(200), FORBIDDEN(403), NOT_FOUND(404);
+    OK("200"), FORBIDDEN("403"), NOT_FOUND("404");
 
-    private final int code;
+    private final String code;
 
-    Status(int code) {
+    Status(String code) {
         this.code = code;
     }
 
-    public static Status getByCode(int code) {
+    public String getCode() {
+        return String.valueOf(code);
+    }
+
+    public static Status getByCode(String code) {
         for (Status status : values()) {
-            if (code == status.code) {
+            if (status.getCode().equals(code)) {
                 return status;
             }
         }
-        throw new IllegalArgumentException("Status code is not valid!");
+        throw new IllegalArgumentException();
     }
 
-    public int getCode() {
-        return code;
+    @Override
+    public String toString() {
+        return String.valueOf(code);
     }
 }

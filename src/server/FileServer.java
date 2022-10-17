@@ -1,90 +1,90 @@
 package server;
 
-import common.Method;
-import common.Status;
-
-import java.io.*;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
+import java.net.SocketException;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
 
-public class FileServer {
-    private final int port;
-    private static final Path DATA_PATH = Path.of("src", "server", "data");
+public class FileServer implements Serializable {
+    private static final Path DATA_PATH = Path.of("src/server/data");
+    public Map<Integer, String> files = new HashMap<>();
+
+    private ServerSocket serverSocket;
+    private volatile boolean keepProcessing = true;
 
     public FileServer(int port) {
-        this.port = port;
-    }
-
-    public void start() {
-        try (ServerSocket server = new ServerSocket(port)) {
-            System.out.println("Server started!");
-            while (true) {
-                Socket socket = server.accept();
-                try (
-                        DataInputStream input = new DataInputStream(socket.getInputStream());
-                        DataOutputStream output = new DataOutputStream(socket.getOutputStream())
-                ) {
-                    Request request = parseInputMessage(input.readUTF());
-                    Response response = null;
-                    switch (request.getMethod()) {
-                        case GET: {
-                            String fileName = request.getContent();
-                            Path file = Path.of(DATA_PATH + "/" + fileName);
-                            if (Files.exists(file)) {
-                                String fileContent = Files.readString(file);
-                                response = new Response(Status.OK, fileContent);
-                            } else {
-                                response = new Response(Status.NOT_FOUND);
-                            }
-                            break;
-                        }
-                        case PUT: {
-                            String content = request.getContent();
-                            int separatorIdx = content.indexOf(' ');
-                            String fileName = content.substring(0, separatorIdx);
-                            String fileContent = content.substring(separatorIdx + 1);
-                            Path file = Path.of(DATA_PATH  + "/" +  fileName);
-                            if (Files.notExists(file)) {
-                                Files.writeString(file, fileContent);
-                                response = new Response(Status.OK);
-                            } else {
-                                response = new Response(Status.FORBIDDEN);
-                            }
-                            break;
-                        }
-                        case DELETE: {
-                            String fileName = request.getContent();
-                            Path file = Path.of(DATA_PATH + "/" + fileName);
-                            if (Files.exists(file)) {
-                                Files.delete(file);
-                                response = new Response(Status.OK);
-                            } else {
-                                response = new Response(Status.NOT_FOUND);
-                            }
-                            break;
-                        }
-                        case EXIT:
-                            System.exit(0);
-                            break;
-                    }
-                    output.writeUTF(response.toString());
-                } catch (IOException e) {
-                    System.out.println("Cannot create IO Stream!");
-                } finally {
-                    socket.close();
-                }
-            }
+        try {
+            serverSocket = new ServerSocket(port);
+            loadState();
         } catch (IOException e) {
-            System.out.println("Cannot create ServerSocket!");
+            handle(e);
         }
     }
 
-    private Request parseInputMessage(String message) {
-        int separatorIdx = message.indexOf(' ');
-        Method method = Method.getByName(message.substring(0, separatorIdx));
-        String content = message.substring(separatorIdx + 1);
-        return new Request(method, content);
+    public void start() {
+        System.out.println("Server started!");
+        while (keepProcessing) {
+            try {
+                Socket socket = serverSocket.accept();
+                Session session = new Session(socket, this);
+                session.start(); // it does not block current thread
+            } catch (IOException e) {
+                handle(e);
+            }
+        }
+    }
+
+    private void handle(Exception e) {
+        if (!(e instanceof SocketException)) {
+            e.printStackTrace();
+        }
+    }
+
+    public void stop() {
+        keepProcessing = false;
+        saveState();
+        closeIgnoringException(serverSocket);
+    }
+
+    public void saveState() {
+        String fileName = "src/server/bin/server.data";
+        try (
+                FileOutputStream fos = new FileOutputStream(fileName);
+                ObjectOutputStream oos = new ObjectOutputStream(fos)
+        ) {
+            oos.writeObject(files);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadState() {
+        String fileName = "src/server/bin/server.data";
+        try (
+                FileInputStream fis = new FileInputStream(fileName);
+                ObjectInputStream oos = new ObjectInputStream(fis)
+        ) {
+            files = (HashMap) oos.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void closeIgnoringException(ServerSocket serverSocket) {
+        if (serverSocket != null) {
+            try {
+                serverSocket.close();
+            } catch (IOException ignore) {
+
+            }
+        }
     }
 }

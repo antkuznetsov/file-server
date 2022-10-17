@@ -4,11 +4,17 @@ import common.Status;
 
 public class Response {
     private Status status;
-    private String content;
+    private Integer fileId;
+    private byte[] fileContent;
 
-    public Response(Status status, String content) {
+    public Response(Status status, int fileId) {
         this.status = status;
-        this.content = content;
+        this.fileId = fileId;
+    }
+
+    public Response(Status status, byte[] fileContent) {
+        this.status = status;
+        this.fileContent = fileContent;
     }
 
     public Response(Status status) {
@@ -19,15 +25,26 @@ public class Response {
         return status;
     }
 
-    public String getContent() {
-        return content;
+    public int getFileId() {
+        return fileId;
+    }
+
+    public byte[] getFileContent() {
+        return fileContent;
     }
 
     @Override
     public String toString() {
-        if (content != null) {
-            return String.format("%d %s", status.getCode(), content);
+        StringBuilder response = new StringBuilder();
+        response.append(status.toString());
+        if (fileId != null) {
+            response.append(' ');
+            response.append(fileId);
         }
-        return String.valueOf(status.getCode());
+        if (fileContent != null) {
+            response.append(' ');
+            response.append(fileContent);
+        }
+        return response.toString();
     }
 }
